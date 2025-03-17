@@ -6,7 +6,9 @@ from .serializers import TaskSerializer
 from django.core.cache import cache
 from django.core.mail import send_mail
 from .tasks import send_task_email
-from django.conf import settings
+# from django.conf import settings
+import csv
+from django.http import HttpResponse
 
 #------------------For creating the new tasks--------------------------------
 @api_view(['POST'])
@@ -56,10 +58,12 @@ def list_tasks(request):
 
  
     tasks = Task.objects.filter(user=request.user)
+    # print("=========tasks=at list tasks=====",list(tasks['tasks']))
     serializer = TaskSerializer(tasks, many=True)
 
     cache.set(cache_key, serializer.data, timeout=60*5)
-
+    tasks_data = serializer.data
+    print("tasks_data-------",tasks_data)
     return Response(serializer.data)
 # -------------------------------------------------------------------
 
@@ -155,3 +159,24 @@ def delete_task(request, task_id):
     except Task.DoesNotExist:
         return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
 #---------------------------------------------------------------------------------------
+
+#-------------------For CSV file exporting - list of tasks---------------------------------------
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def export_tasks_to_csv(request):
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="tasks.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Title', 'Description', 'Priority', 'Due Date', 'Status', 'Assignee', 'User'])
+
+    tasks = Task.objects.filter(user=request.user)
+    for task in tasks:
+        writer.writerow([
+            task.id, task.title, task.description, task.priority, 
+            task.due_date, task.status, task.assignee.id, task.user.id
+        ])
+
+    return response
+#-------------------------------------------------------------------------------
